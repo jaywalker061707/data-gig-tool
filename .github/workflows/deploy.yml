@@ -1,0 +1,65 @@
+name: Deploy GIG Tool
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package.json
+
+      - name: Build React frontend
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: |
+          npm install
+          npm run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: frontend/dist
+
+  deploy-lambda:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies into package dir
+        working-directory: backend
+        run: |
+          pip install \
+            duckdb openpyxl pandas scipy anthropic flask flask-cors \
+            --target ./package --platform manylinux2014_x86_64 \
+            --implementation cp --python-version 3.12 \
+            --only-binary=:all: --upgrade
+
+      - name: Zip Lambda package
+        working-directory: backend
+        run: |
+          cp *.py package/
+          cd package && zip -r ../lambda.zip . -x "*.pyc" -x "__pycache__/*"
+
+      - name: Deploy to Lambda
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION:    us-east-1
+        run: |
+          aws lambda update-function-code \
+            --function-name gig-comparison-engine \
+            --zip-file fileb://backend/lambda.zip

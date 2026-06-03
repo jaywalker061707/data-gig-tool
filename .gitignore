@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Secrets — NEVER commit these
+.env.local
+.env
+backend/.env
+*.key
+*.pem
+
+# Lambda build artifact
+backend/lambda.zip
+backend/package/
+
+# Local run data (stays on each machine / S3 in prod)
+backend/data/runs/
+backend/data/*.xlsm
+backend/data/*.xlsx
+backend/data/*.csv
+
+# Logs
+backend/server.log
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
