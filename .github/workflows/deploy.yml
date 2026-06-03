@@ -24,11 +24,14 @@ jobs:
           npm install
           npm run build
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: frontend/dist
+      - name: Deploy to S3
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION:    us-east-1
+        run: |
+          aws s3 sync frontend/dist/ s3://gig-data-integrity-tool/app/ --delete
+          aws s3 website s3://gig-data-integrity-tool --index-document index.html --error-document index.html
 
   deploy-lambda:
     runs-on: ubuntu-latest
@@ -43,10 +46,13 @@ jobs:
         working-directory: backend
         run: |
           pip install \
-            duckdb openpyxl pandas scipy anthropic flask flask-cors \
-            --target ./package --platform manylinux2014_x86_64 \
-            --implementation cp --python-version 3.12 \
-            --only-binary=:all: --upgrade
+            duckdb openpyxl pandas scipy anthropic \
+            --target ./package \
+            --platform manylinux2014_x86_64 \
+            --implementation cp \
+            --python-version 3.12 \
+            --only-binary=:all: \
+            --upgrade
 
       - name: Zip Lambda package
         working-directory: backend
@@ -54,7 +60,7 @@ jobs:
           cp *.py package/
           cd package && zip -r ../lambda.zip . -x "*.pyc" -x "__pycache__/*"
 
-      - name: Deploy to Lambda
+      - name: Deploy Lambda
         env:
           AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
