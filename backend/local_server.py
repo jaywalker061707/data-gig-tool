@@ -251,16 +251,38 @@ def handle_site_detail():
 
 
 # ── Export ────────────────────────────────────────────────────────────────
+# POST /api/export  body: {run_id, sites: ["venice.fl", ...] or null for all}
 
 @app.route("/api/export", methods=["POST"])
 def handle_export():
     try:
-        results = request.get_json().get("results", {})
+        body    = request.get_json() or {}
+        run_id  = body.get("run_id")
+        sites   = body.get("sites")  # list of site dns, or null = all
+
+        if run_id:
+            run = load_run(run_id)
+            if not run:
+                return jsonify({"error": "Run not found"}), 404
+            results = run["results"]
+        else:
+            # Legacy: results sent directly (small payloads only)
+            results = body.get("results", {})
+
+        if sites:
+            results = {k: v for k, v in results.items() if k in sites}
+
+        filename = f"GIG_{(run.get('name') if run_id else 'results').replace(' ','_')}"
+        if sites and len(sites) == 1:
+            filename = f"GIG_{sites[0]}"
+        filename += ".xlsx"
+
         buf = io.BytesIO(build_excel(results))
         return send_file(buf,
             mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            as_attachment=True, download_name="GIG_Reconciliation_Results.xlsx")
+            as_attachment=True, download_name=filename)
     except Exception as e:
+        print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
 

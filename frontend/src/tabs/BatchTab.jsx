@@ -3,9 +3,11 @@ import { useStore } from '../store'
 import { siteSummary, scoreClass, fmt } from '../utils'
 
 export default function BatchTab() {
-  const { results, setActiveSite, setActiveTab } = useStore()
-  const [search, setSearch] = useState('')
-  const [sort, setSort] = useState({ col: 'avg_score', dir: 1 })
+  const { results, activeRunId, setActiveSite, setActiveTab } = useStore()
+  const [search, setSearch]       = useState('')
+  const [sort, setSort]           = useState({ col: 'avg_score', dir: 1 })
+  const [selected, setSelected]   = useState(new Set())
+  const [exporting, setExporting] = useState(false)
 
   const summaries = useMemo(() => {
     if (!results) return []
@@ -30,6 +32,50 @@ export default function BatchTab() {
     setActiveTab('recon')
   }
 
+  function toggleSelect(site, e) {
+    e.stopPropagation()
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(site) ? next.delete(site) : next.add(site)
+      return next
+    })
+  }
+
+  function toggleSelectAll(e) {
+    e.stopPropagation()
+    if (selected.size === filtered.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(filtered.map(s => s.site)))
+    }
+  }
+
+  async function doExport(sites) {
+    setExporting(true)
+    try {
+      const body = { run_id: activeRunId }
+      if (sites) body.sites = sites
+      const res = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const cd   = res.headers.get('Content-Disposition') || ''
+      const match = cd.match(/filename="?([^"]+)"?/)
+      const fname = match ? match[1] : 'GIG_export.xlsx'
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = fname; a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert('Export failed: ' + e.message)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   function Th({ col, children }) {
     const active = sort.col === col
     return <th onClick={() => toggleSort(col)}>{children} {active ? (sort.dir === -1 ? '↓' : '↑') : ''}</th>
@@ -43,6 +89,8 @@ export default function BatchTab() {
     ? Math.round(summaries.filter(s => s.avg_score != null).reduce((a,s) => a + s.avg_score, 0)
         / summaries.filter(s => s.avg_score != null).length)
     : null
+
+  const allSelected = selected.size > 0 && selected.size === filtered.length
 
   return (
     <div>
@@ -72,18 +120,33 @@ export default function BatchTab() {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <button
-          style={{ marginLeft: 'auto', padding: '7px 16px', border: '1px solid var(--gray-300)', borderRadius: 6, cursor: 'pointer', fontSize: 13, background: 'white' }}
-          onClick={() => exportExcel(summaries, results)}
-        >
-          ⬇ Export Excel
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          {selected.size > 0 && (
+            <button
+              style={{ padding: '7px 16px', border: '1px solid var(--comcast-blue)', borderRadius: 6, cursor: exporting ? 'not-allowed' : 'pointer', fontSize: 13, background: 'var(--comcast-blue)', color: 'white' }}
+              onClick={() => doExport([...selected])}
+              disabled={exporting}
+            >
+              {exporting ? 'Exporting…' : `⬇ Export ${selected.size} Site${selected.size > 1 ? 's' : ''}`}
+            </button>
+          )}
+          <button
+            style={{ padding: '7px 16px', border: '1px solid var(--gray-300)', borderRadius: 6, cursor: exporting ? 'not-allowed' : 'pointer', fontSize: 13, background: 'white' }}
+            onClick={() => doExport(null)}
+            disabled={exporting}
+          >
+            {exporting ? 'Exporting…' : '⬇ Export All'}
+          </button>
+        </div>
       </div>
 
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
+              <th style={{ width: 32 }}>
+                <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
+              </th>
               <Th col="site">Site</Th>
               <Th col="foreseer_devices">Foreseer</Th>
               <Th col="linx_assets">LinX</Th>
@@ -99,9 +162,12 @@ export default function BatchTab() {
             {filtered.map(s => (
               <tr
                 key={s.site}
-                style={{ cursor: 'pointer' }}
+                style={{ cursor: 'pointer', background: selected.has(s.site) ? 'var(--comcast-blue-light)' : '' }}
                 onClick={() => drillSite(s.site)}
               >
+                <td onClick={e => toggleSelect(s.site, e)} style={{ textAlign: 'center' }}>
+                  <input type="checkbox" checked={selected.has(s.site)} onChange={() => {}} />
+                </td>
                 <td style={{ fontWeight: 600, color: 'var(--comcast-blue)' }}>{s.site}</td>
                 <td style={{ textAlign: 'right' }}>{fmt(s.foreseer_devices)}</td>
                 <td style={{ textAlign: 'right' }}>{fmt(s.linx_assets)}</td>
@@ -123,26 +189,6 @@ export default function BatchTab() {
       </div>
     </div>
   )
-}
-
-async function exportExcel(summaries, results) {
-  try {
-    const res = await fetch('/api/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ results }),
-    })
-    if (!res.ok) throw new Error('Export failed')
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'GIG_Reconciliation_Results.xlsx'
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch (e) {
-    alert('Export failed: ' + e.message)
-  }
 }
 
 function EmptyState() {
