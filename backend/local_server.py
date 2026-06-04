@@ -184,6 +184,9 @@ def handle_run_delta():
 
         threading.Thread(target=_process, daemon=True).start()
         return jsonify({"job_id": job_id, "message": "Delta processing started."}), 202
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Site detail (on-demand) ────────────────────────────────────────────────
