@@ -77,6 +77,7 @@ export const useStore = create((set, get) => ({
 
   setActiveSite: (site) => set({ activeSite: site }),
   setActiveTab:  (tab)  => set({ activeTab: tab }),
+  setMapData:    (mapData) => set({ mapData }),
 
   // Load prefix trace + asset pairs for a site on demand
   loadSiteDetail: async (site_dns) => {

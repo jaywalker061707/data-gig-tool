@@ -50,8 +50,20 @@ function buildRegionScores(summaries, mapData) {
 }
 
 export default function MapTab() {
-  const { results, mapData, setActiveSite, setActiveTab } = useStore()
+  const { results, mapData, setActiveSite, setActiveTab, activeRunId, setMapData } = useStore()
   const [selectedRegion, setSelectedRegion] = useState(null)
+  const [remapping, setRemapping] = useState(false)
+
+  async function handleRemap() {
+    if (!activeRunId) return
+    setRemapping(true)
+    try {
+      const res = await fetch(`/api/remap/${activeRunId}`, { method: 'POST' })
+      const data = await res.json()
+      if (data.map_data) setMapData(data.map_data)
+    } catch(e) { console.error(e) }
+    finally { setRemapping(false) }
+  }
 
   const summaries = useMemo(() => {
     if (!results) return {}
@@ -123,6 +135,15 @@ export default function MapTab() {
           {regionCount} regions · {sites.length} sites plotted
           {Object.keys(summaries).length > 0 && ` · ${Object.keys(summaries).length} with reconciliation data`}
         </div>
+        {activeRunId && (
+          <button
+            onClick={handleRemap}
+            disabled={remapping}
+            style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '1px solid var(--gray-300)', background: 'white', cursor: remapping ? 'not-allowed' : 'pointer', color: 'var(--gray-600)' }}
+          >
+            {remapping ? 'Rebuilding…' : '⟳ Rebuild Map'}
+          </button>
+        )}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, color: 'var(--gray-400)', fontWeight: 600 }}>Score:</span>
           {legend.map(l => (

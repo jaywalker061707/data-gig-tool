@@ -100,6 +100,45 @@ def build_map_data(foreseer_bytes, results=None):
     }
 
 
+def build_map_data_from_sites(msl_sites, results=None):
+    """
+    Rebuild map polygons from already-saved msl_sites list.
+    No Excel file needed — used by the /api/remap endpoint.
+    """
+    region_points  = defaultdict(list)
+    division_points = defaultdict(list)
+
+    for s in msl_sites:
+        lat = s.get("lat"); lon = s.get("lon")
+        region   = s.get("region", "")
+        division = s.get("division", "")
+        if not lat or not lon or not region:
+            continue
+        region_points[region].append((lat, lon))
+        if division:
+            division_points[division].append((lat, lon))
+
+    # Update avg_score on each site from current results
+    updated_sites = []
+    for s in msl_sites:
+        site = dict(s)
+        if results and site.get("short_dns") in results:
+            site_data = results[site["short_dns"]]
+            recon  = site_data.get("reconciliation", [])
+            active = [r for r in recon
+                      if r.get("device_type") != "TOTAL_ASSETS_ALL_TYPES"
+                      and (r.get("foreseer_count", 0) or 0) > 0]
+            scores = [float(r["match_score"]) for r in active if r.get("match_score") is not None]
+            site["avg_score"] = round(sum(scores) / len(scores)) if scores else None
+        updated_sites.append(site)
+
+    return {
+        "regions":   _build_hulls(region_points),
+        "divisions": _build_hulls(division_points),
+        "sites":     updated_sites,
+    }
+
+
 def _concave_hull(points, alpha=0.015):
     """
     Concave hull using alphashape. Falls back to convex hull if alphashape

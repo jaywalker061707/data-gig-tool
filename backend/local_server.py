@@ -192,6 +192,31 @@ def handle_run_delta():
         return jsonify({"error": str(e)}), 500
 
 
+# ── Remap: recompute map polygons from saved run, no re-reconciliation ───────
+
+@app.route("/api/remap/<run_id>", methods=["POST"])
+def handle_remap(run_id):
+    try:
+        run = load_run(run_id)
+        if not run:
+            return jsonify({"error": f"Run {run_id} not found"}), 404
+
+        from map_data import build_map_data_from_sites
+        new_map = build_map_data_from_sites(run["msl_sites"], run["results"])
+
+        # Update saved run in place
+        import gzip as _gzip, json as _json
+        from runs_store import RUNS_DIR, _path
+        run["map_data"] = new_map
+        with _gzip.open(_path(run_id), "wt", encoding="utf-8") as f:
+            _json.dump(run, f, default=str)
+
+        return jsonify({"status": "ok", "map_data": new_map})
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Site detail (on-demand) ────────────────────────────────────────────────
 
 @app.route("/api/site-detail", methods=["POST"])
