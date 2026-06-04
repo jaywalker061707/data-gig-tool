@@ -48,7 +48,18 @@ async function pollJob(jobId, onStatus) {
 }
 
 export async function runFull(foreseer, linxFiles, dict, runName, onStatus) {
-  // Upload all files to S3
+  // EC2 / local dev: direct multipart POST, no S3 presign needed
+  if (!IS_PROD) {
+    onStatus('Uploading and processing... this may take several minutes.')
+    const form = new FormData()
+    form.append('foreseer', foreseer)
+    linxFiles.forEach(f => form.append('linx', f))
+    form.append('dict', dict)
+    form.append('run_name', runName)
+    return checkRes(await fetch('/api/run', { method: 'POST', body: form }))
+  }
+
+  // Lambda: upload to S3 first, then trigger async job
   onStatus('Uploading Foreseer file...')
   const foreseerKey = await uploadToS3(foreseer, onStatus)
 
