@@ -100,14 +100,33 @@ def build_map_data(foreseer_bytes, results=None):
     }
 
 
+def _convex_hull_pure(points):
+    """Pure Python convex hull using Graham scan — no scipy needed."""
+    if len(points) < 3:
+        return points + [points[0]] if points else []
+    # Find bottom-most point
+    pivot = min(points, key=lambda p: (p[1], p[0]))
+    import math
+    def angle(p):
+        return math.atan2(p[0] - pivot[0], p[1] - pivot[1])
+    sorted_pts = sorted(set(map(tuple, points)), key=angle)
+    hull = []
+    for p in sorted_pts:
+        while len(hull) >= 2:
+            o, a, b = hull[-2], hull[-1], p
+            cross = (a[0]-o[0])*(b[1]-o[1]) - (a[1]-o[1])*(b[0]-o[0])
+            if cross <= 0:
+                hull.pop()
+            else:
+                break
+        hull.append(p)
+    hull.append(hull[0])  # close polygon
+    return hull
+
+
 def _build_hulls(points_by_group):
     """Compute convex hull per group, return GeoJSON FeatureCollection."""
-    try:
-        from scipy.spatial import ConvexHull
-        import numpy as np
-        has_scipy = True
-    except ImportError:
-        has_scipy = False
+    has_scipy = False  # use pure Python hull
 
     features = []
     for group_name, pts in points_by_group.items():
@@ -117,19 +136,8 @@ def _build_hulls(points_by_group):
             # Not enough points for a hull — add single point or skip
             continue
 
-        if has_scipy:
-            try:
-                arr = np.array(pts)
-                hull = ConvexHull(arr)
-                # Hull vertices in order, close the polygon
-                hull_pts = arr[hull.vertices].tolist()
-                hull_pts.append(hull_pts[0])  # close ring
-                # GeoJSON uses [lon, lat]
-                coords = [[p[1], p[0]] for p in hull_pts]
-            except Exception:
-                coords = _simple_bbox(pts)
-        else:
-            coords = _simple_bbox(pts)
+        hull_pts = _convex_hull_pure(pts)
+        coords = [[p[1], p[0]] for p in hull_pts]  # GeoJSON uses [lon, lat]
 
         features.append({
             "type": "Feature",

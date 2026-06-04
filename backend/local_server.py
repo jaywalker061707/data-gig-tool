@@ -1,7 +1,7 @@
 """
 GIG Data Integrity Tool — Backend Server
 """
-import sys, os, traceback, io
+import sys, os, traceback, io, uuid, threading
 sys.path.insert(0, os.path.dirname(__file__))
 
 from flask import Flask, request, jsonify, send_file
@@ -14,6 +14,18 @@ from runs_store import (save_run, list_runs, load_run, load_latest_run,
 
 app  = Flask(__name__)
 CORS(app)
+
+# In-memory job store: job_id -> {"state": "queued|processing|complete|error", ...}
+_jobs = {}
+_jobs_lock = threading.Lock()
+
+def _set_job(job_id, state, extra=None):
+    with _jobs_lock:
+        _jobs[job_id] = {"state": state, **(extra or {})}
+
+def _get_job_state(job_id):
+    with _jobs_lock:
+        return _jobs.get(job_id)
 
 # Serve React build in production
 FRONTEND_BUILD = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
@@ -61,7 +73,17 @@ def handle_delete_run(run_id):
     return jsonify({"deleted": delete_run(run_id)})
 
 
-# ── Full reconciliation run ───────────────────────────────────────────────
+# ── Job status polling ────────────────────────────────────────────────────
+
+@app.route("/api/jobs/<job_id>", methods=["GET"])
+def handle_job_status(job_id):
+    job = _get_job_state(job_id)
+    if job is None:
+        return jsonify({"error": "Job not found"}), 404
+    return jsonify(job)
+
+
+# ── Full reconciliation run (async) ──────────────────────────────────────
 
 @app.route("/api/run", methods=["POST"])
 def handle_run():
@@ -79,34 +101,40 @@ def handle_run():
         db       = df.read()
         dict_fn  = df.filename
         run_name = request.form.get("run_name", "").strip() or _default_name(lb)
+        job_id   = str(uuid.uuid4())
 
-        print(f"Full run: '{run_name}'")
-        msl_sites = load_msl(fb)
-        results   = run_reconciliation(fb, lb, db, msl_sites, dict_fn)
-        map_data  = build_map_data(fb, results)
+        _set_job(job_id, "queued", {"run_name": run_name})
 
-        run_id = save_run(
-            name=run_name, results=results, msl_sites=msl_sites, map_data=map_data,
-            run_type="full", foreseer_bytes=fb, dict_bytes=db, dict_filename=dict_fn,
-        )
+        def _process():
+            try:
+                _set_job(job_id, "processing", {"message": "Running reconciliation...", "run_name": run_name})
+                print(f"Full run: '{run_name}' (job {job_id})")
+                msl_sites = load_msl(fb)
+                results   = run_reconciliation(fb, lb, db, msl_sites, dict_fn)
+                map_data  = build_map_data(fb, results)
+                run_id    = save_run(
+                    name=run_name, results=results, msl_sites=msl_sites, map_data=map_data,
+                    run_type="full", foreseer_bytes=fb, dict_bytes=db, dict_filename=dict_fn,
+                )
+                _set_job(job_id, "complete", {
+                    "run_id": run_id, "run_name": run_name,
+                    "results": results, "msl_sites": msl_sites, "map_data": map_data,
+                })
+                print(f"Full run complete: '{run_name}' (job {job_id})")
+            except Exception:
+                err = traceback.format_exc()
+                print(err)
+                _set_job(job_id, "error", {"message": err})
 
-        return jsonify({
-            "status": "ok", "run_id": run_id, "run_name": run_name,
-            "results": results, "msl_sites": msl_sites, "map_data": map_data,
-        })
-    except Exception as e:
-        print(traceback.format_exc())
-        return jsonify({"error": str(e)}), 500
+        threading.Thread(target=_process, daemon=True).start()
+        return jsonify({"job_id": job_id, "run_name": run_name,
+                        "message": "Processing started. Poll /api/jobs/{job_id} for status."}), 202
 
 
 # ── Delta run — upload 1-N site LinX files, merge into baseline ───────────
 
 @app.route("/api/run-delta", methods=["POST"])
 def handle_run_delta():
-    """
-    Upload one or more site-specific LinX files to update a baseline run.
-    The Foreseer and Dictionary are loaded from the baseline — no re-upload needed.
-    """
     try:
         baseline_id = request.form.get("baseline_run_id", "")
         if not baseline_id:
@@ -117,45 +145,45 @@ def handle_run_delta():
             return jsonify({"error": "At least one LinX file required"}), 400
 
         run_name = request.form.get("run_name", "").strip()
-        lb = [f.read() for f in lf if f.filename]
+        lb       = [f.read() for f in lf if f.filename]
+        job_id   = str(uuid.uuid4())
 
-        # Load Foreseer + Dictionary from baseline
-        fb, db, dict_fn = get_baseline_files(baseline_id)
-        if not fb or not db:
-            return jsonify({"error": "Baseline run does not have stored Foreseer/Dictionary files. Please run a full reconciliation first."}), 400
+        _set_job(job_id, "queued", {"run_name": run_name or "Delta Update"})
 
-        # Run reconciliation for just the uploaded sites
-        msl_sites_full = load_msl(fb)
-        new_results    = run_reconciliation(fb, lb, db, msl_sites_full, dict_fn)
-        changed_sites  = list(new_results.keys())
+        def _process():
+            try:
+                _set_job(job_id, "processing", {"message": "Loading baseline...", "run_name": run_name})
+                fb, db, dict_fn = get_baseline_files(baseline_id)
+                if not fb or not db:
+                    _set_job(job_id, "error", {"message": "Baseline run does not have stored Foreseer/Dictionary files. Please run a full reconciliation first."})
+                    return
 
-        if not run_name:
-            run_name = f"Delta — {', '.join(changed_sites[:3])}{'...' if len(changed_sites) > 3 else ''}"
+                msl_sites_full = load_msl(fb)
+                _set_job(job_id, "processing", {"message": "Running delta reconciliation..."})
+                new_results   = run_reconciliation(fb, lb, db, msl_sites_full, dict_fn)
+                changed_sites = list(new_results.keys())
 
-        # Merge into baseline
-        merged_results, merged_msl, merged_map = apply_delta(
-            baseline_id, new_results, msl_sites_full, None, run_name, changed_sites
-        )
+                rn = run_name or f"Delta — {', '.join(changed_sites[:3])}{'...' if len(changed_sites) > 3 else ''}"
 
-        run_id = save_run(
-            name=run_name, results=merged_results, msl_sites=merged_msl, map_data=merged_map,
-            run_type="delta", parent_run_id=baseline_id, changed_sites=changed_sites,
-        )
+                merged_results, merged_msl, merged_map = apply_delta(
+                    baseline_id, new_results, msl_sites_full, None, rn, changed_sites
+                )
+                run_id = save_run(
+                    name=rn, results=merged_results, msl_sites=merged_msl, map_data=merged_map,
+                    run_type="delta", parent_run_id=baseline_id, changed_sites=changed_sites,
+                )
+                print(f"Delta run saved: {run_id} — {len(changed_sites)} site(s)")
+                _set_job(job_id, "complete", {
+                    "run_id": run_id, "run_name": rn, "changed_sites": changed_sites,
+                    "results": merged_results, "msl_sites": merged_msl, "map_data": merged_map,
+                })
+            except Exception:
+                err = traceback.format_exc()
+                print(err)
+                _set_job(job_id, "error", {"message": err})
 
-        print(f"Delta run saved: {run_id} — updated {len(changed_sites)} site(s): {changed_sites}")
-
-        return jsonify({
-            "status":        "ok",
-            "run_id":        run_id,
-            "run_name":      run_name,
-            "changed_sites": changed_sites,
-            "results":       merged_results,
-            "msl_sites":     merged_msl,
-            "map_data":      merged_map,
-        })
-    except Exception as e:
-        print(traceback.format_exc())
-        return jsonify({"error": str(e)}), 500
+        threading.Thread(target=_process, daemon=True).start()
+        return jsonify({"job_id": job_id, "message": "Delta processing started."}), 202
 
 
 # ── Site detail (on-demand) ────────────────────────────────────────────────
