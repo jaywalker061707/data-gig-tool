@@ -38,11 +38,51 @@ def load_csv(file_bytes):
 
 
 def load_dict_file(file_bytes, filename=""):
-    """Load asset dictionary — accepts both CSV and Excel."""
+    """Load asset dictionary — accepts both CSV and Excel, normalizes column names."""
     name = filename.lower()
     if name.endswith(".xlsx") or name.endswith(".xlsm") or name.endswith(".xls"):
-        return load_excel_sheet(file_bytes)
-    return load_csv(file_bytes)
+        rows = load_excel_sheet(file_bytes)
+    else:
+        rows = load_csv(file_bytes)
+    return _normalize_dict_rows(rows)
+
+
+def _normalize_dict_rows(rows):
+    """
+    Normalize dictionary rows to always have:
+      'Device Type Description'
+      'dev prefix / mod prefix combo for lookup'
+
+    Supports two formats:
+      Old: 'Device Type Description', 'dev prefix / mod prefix combo for lookup'
+      New: 'NAME' (2nd occurrence = description), 'DEVICE_TYPE_PREFIX', 'DEVICE_SUB_ASSET'
+    """
+    if not rows:
+        return rows
+    sample = rows[0]
+    # Already in old format
+    if 'Device Type Description' in sample and 'dev prefix / mod prefix combo for lookup' in sample:
+        return rows
+    # New format — build combo key from DEVICE_TYPE_PREFIX + DEVICE_SUB_ASSET
+    if 'DEVICE_TYPE_PREFIX' in sample:
+        normalized = []
+        for r in rows:
+            prefix = str(r.get('DEVICE_TYPE_PREFIX') or '').strip()
+            sub    = str(r.get('DEVICE_SUB_ASSET') or '').strip()
+            combo  = f"{prefix}-{sub}" if sub else prefix
+            # NAME appears twice in headers — pandas/csv gives NAME and NAME.1
+            # Use whichever has the device type description (longer value)
+            name1  = str(r.get('NAME') or '').strip()
+            name2  = str(r.get('NAME.1') or r.get('DESCRIPTION') or '').strip()
+            desc   = name2 if len(name2) > len(name1) else name1
+            if not combo or not desc:
+                continue
+            normalized.append({
+                'Device Type Description':              desc,
+                'dev prefix / mod prefix combo for lookup': combo,
+            })
+        return normalized
+    return rows
 
 
 def load_linx_files(file_bytes_list):
