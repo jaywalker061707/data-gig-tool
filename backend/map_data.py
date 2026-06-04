@@ -26,9 +26,9 @@ def build_map_data(foreseer_bytes, results=None):
     for row in ws.iter_rows(min_row=2, max_row=5000, values_only=True):
         region   = str(row[2] or "").strip()
         division = str(row[1] or "").strip()
-        lat_raw  = row[41]
-        lon_raw  = row[40]
-        full_dns = str(row[18] or "").strip()
+        lat_raw  = row[41]   # col 41 = Latitude
+        lon_raw  = row[40]   # col 40 = Longitude
+        full_dns = str(row[18] or "").strip()  # col 18 = Site DNS (full)
         site_name = str(row[5] or "").strip()
 
         if not region or not lat_raw or not lon_raw:
