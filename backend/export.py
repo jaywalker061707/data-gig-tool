@@ -81,7 +81,8 @@ DETAIL_HEADERS = [
     "LinX Missing Serials", "LinX Missing IPs", "Foreseer Missing IPs",
     "IP Mismatch Flag",
     "Notes",
-    "Foreseer Asset IPs", "LinX Asset IPs",
+    "Foreseer Asset IPs", "Foreseer Assets w/ Comms IP",
+    "LinX Asset IDs", "LinX Serial Numbers", "LinX Asset IPs",
     "LinX Assets Missing Serial", "LinX Assets Missing IP",
     "Foreseer IPs Not in LinX", "LinX IPs Not in Foreseer",
 ]
@@ -139,6 +140,9 @@ def _write_site_tab(wb, site_dns, site_data):
             _int(r.get("ip_mismatch_flag")),
             r.get("notes") or "",
             r.get("foreseer_asset_ip_addresses") or "",
+            r.get("foreseer_assets_with_comms_ip") or "",
+            r.get("linx_asset_ids") or "",
+            r.get("linx_serial_numbers") or "",
             r.get("linx_asset_ip_addresses") or "",
             r.get("linx_assets_missing_serial") or "",
             r.get("linx_assets_missing_ip") or "",
@@ -160,7 +164,7 @@ def _write_site_tab(wb, site_dns, site_data):
             _int(total_row.get("linx_missing_serial_count")),
             _int(total_row.get("linx_missing_ip_count")),
             _int(total_row.get("foreseer_missing_ip_count")),
-            "", "", "", "", "", "", "", "",
+            "", "", "", "", "", "", "", "", "", "", "",
         ]
         _write_row(ws, excel_row, vals, fill=FILL_TOTAL, bold=True)
 
@@ -322,6 +326,67 @@ def _write_pairs_tab(wb, site_dns, pairs):
         ws.cell(row=excel_row + 1, column=2 + i, value=f"{method}: {count}").font = Font(name="Segoe UI", size=9)
 
 
+def _write_all_detail_tab(wb, results):
+    ws = wb.create_sheet(title="All Detail")
+
+    all_headers = ["Site"] + DETAIL_HEADERS
+    ws.merge_cells(f"A1:{get_column_letter(len(all_headers))}1")
+    c = ws["A1"]
+    c.value = "GIG Data Integrity — All Sites Detail"
+    c.font  = Font(bold=True, color=WHITE, size=13, name="Segoe UI")
+    c.fill  = FILL_HEADER
+    c.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[1].height = 26
+
+    _apply_header(ws, all_headers, row=2)
+    ws.row_dimensions[2].height = 22
+
+    excel_row = 3
+    for site_dns, site_data in results.items():
+        recon     = site_data.get("reconciliation", [])
+        data_rows = [r for r in recon if r.get("device_type") != "TOTAL_ASSETS_ALL_TYPES"]
+        data_rows.sort(key=lambda r: (-abs(int(r.get("count_difference") or 0)), str(r.get("device_type",""))))
+
+        for r in data_rows:
+            status = r.get("match_status", "")
+            fill   = STATUS_FILL.get(status, FILL_NONE)
+            vals = [
+                site_dns,
+                r.get("device_type"),
+                _int(r.get("foreseer_count")),
+                _int(r.get("linx_count")),
+                _int(r.get("count_difference")),
+                _float(r.get("pct_difference")),
+                status,
+                _int(r.get("match_score")),
+                _int(r.get("linx_missing_serial_count")),
+                _int(r.get("linx_missing_ip_count")),
+                _int(r.get("foreseer_missing_ip_count")),
+                _int(r.get("ip_mismatch_flag")),
+                r.get("notes") or "",
+                r.get("foreseer_asset_ip_addresses") or "",
+                r.get("foreseer_assets_with_comms_ip") or "",
+                r.get("linx_asset_ids") or "",
+                r.get("linx_serial_numbers") or "",
+                r.get("linx_asset_ip_addresses") or "",
+                r.get("linx_assets_missing_serial") or "",
+                r.get("linx_assets_missing_ip") or "",
+                r.get("foreseer_ips_not_in_linx") or "",
+                r.get("linx_ips_not_in_foreseer") or "",
+            ]
+            _write_row(ws, excel_row, vals, fill=fill)
+            excel_row += 1
+
+    ws.column_dimensions["A"].width = 22
+    ws.column_dimensions["B"].width = 42
+    ws.column_dimensions["G"].width = 34
+    ws.column_dimensions["M"].width = 55
+    for col in ["C","D","E","F","H","I","J","K","L"]:
+        ws.column_dimensions[col].width = 14
+    _freeze(ws, "B3")
+    ws.auto_filter.ref = f"A2:{get_column_letter(len(all_headers))}{excel_row - 1}"
+
+
 def build_excel(results):
     wb = openpyxl.Workbook()
     _write_batch_tab(wb, results)
@@ -331,6 +396,8 @@ def build_excel(results):
         pairs = site_data.get("asset_pairs", [])
         if pairs:
             _write_pairs_tab(wb, site_dns, pairs)
+
+    _write_all_detail_tab(wb, results)
 
     buf = io.BytesIO()
     wb.save(buf)
