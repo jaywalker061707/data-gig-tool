@@ -5,6 +5,7 @@
  * 3. Poll /api/jobs/{job_id} every 10s until complete
  */
 const API_URL = import.meta.env.VITE_API_URL || ''
+const IS_PROD  = !!import.meta.env.VITE_API_URL
 
 async function checkRes(res) {
   if (!res.ok) {
