@@ -100,16 +100,43 @@ def build_map_data(foreseer_bytes, results=None):
     }
 
 
-def _convex_hull_pure(points):
-    """Pure Python convex hull using Graham scan — no scipy needed."""
-    if len(points) < 3:
-        return points + [points[0]] if points else []
-    # Find bottom-most point
-    pivot = min(points, key=lambda p: (p[1], p[0]))
+def _concave_hull(points, alpha=0.015):
+    """
+    Concave hull using alphashape. Falls back to convex hull if alphashape
+    unavailable or produces an empty/invalid geometry.
+    alpha: smaller = tighter fit, larger = more convex. 0.015 works well for
+    Comcast regions where sites span hundreds of miles.
+    """
+    try:
+        import alphashape
+        from shapely.geometry import mapping, MultiPolygon, Polygon
+        pts = list(set(map(tuple, points)))
+        if len(pts) < 3:
+            return _convex_hull_fallback(pts)
+        shape = alphashape.alphashape(pts, alpha)
+        if shape is None or shape.is_empty:
+            return _convex_hull_fallback(pts)
+        # Return list of coordinate rings (handle MultiPolygon by taking largest)
+        if isinstance(shape, MultiPolygon):
+            shape = max(shape.geoms, key=lambda g: g.area)
+        if isinstance(shape, Polygon):
+            coords_latlon = list(shape.exterior.coords)
+            return [[lon, lat] for lat, lon in coords_latlon]
+        return _convex_hull_fallback(pts)
+    except Exception:
+        return _convex_hull_fallback(points)
+
+
+def _convex_hull_fallback(points):
+    """Graham scan convex hull — used when alphashape unavailable."""
     import math
+    pts = list(set(map(tuple, points)))
+    if len(pts) < 3:
+        return [[p[1], p[0]] for p in pts]
+    pivot = min(pts, key=lambda p: (p[1], p[0]))
     def angle(p):
         return math.atan2(p[0] - pivot[0], p[1] - pivot[1])
-    sorted_pts = sorted(set(map(tuple, points)), key=angle)
+    sorted_pts = sorted(pts, key=angle)
     hull = []
     for p in sorted_pts:
         while len(hull) >= 2:
@@ -120,24 +147,20 @@ def _convex_hull_pure(points):
             else:
                 break
         hull.append(p)
-    hull.append(hull[0])  # close polygon
-    return hull
+    hull.append(hull[0])
+    return [[p[1], p[0]] for p in hull]
 
 
 def _build_hulls(points_by_group):
-    """Compute convex hull per group, return GeoJSON FeatureCollection."""
-    has_scipy = False  # use pure Python hull
-
+    """Compute concave hull per group, return GeoJSON FeatureCollection."""
     features = []
     for group_name, pts in points_by_group.items():
         if group_name in ("DELETE", "IT", "Test Region", "LABS"):
             continue
         if len(pts) < 3:
-            # Not enough points for a hull — add single point or skip
             continue
 
-        hull_pts = _convex_hull_pure(pts)
-        coords = [[p[1], p[0]] for p in hull_pts]  # GeoJSON uses [lon, lat]
+        coords = _concave_hull(pts)
 
         features.append({
             "type": "Feature",

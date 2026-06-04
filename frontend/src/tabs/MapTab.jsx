@@ -139,7 +139,7 @@ export default function MapTab() {
       </div>
 
       {/* Map */}
-      <div style={{ height: 480, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--gray-200)', boxShadow: '0 1px 3px rgba(0,0,0,.08)' }}>
+      <div style={{ flex: 1, minHeight: 480, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--gray-200)', boxShadow: '0 1px 3px rgba(0,0,0,.08)' }}>
         {!hasSites && (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 32 }}>🗺️</div>
@@ -150,7 +150,7 @@ export default function MapTab() {
           <MapContainer
             center={[38.5, -96]}
             zoom={4}
-            style={{ width: '100%', height: 480 }}
+            style={{ width: '100%', height: '100%' }}
             scrollWheelZoom={true}
           >
             <TileLayer
