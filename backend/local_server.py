@@ -129,6 +129,9 @@ def handle_run():
         threading.Thread(target=_process, daemon=True).start()
         return jsonify({"job_id": job_id, "run_name": run_name,
                         "message": "Processing started. Poll /api/jobs/{job_id} for status."}), 202
+    except Exception as e:
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Delta run — upload 1-N site LinX files, merge into baseline ───────────
