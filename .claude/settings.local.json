@@ -41,7 +41,13 @@
       "Bash(git config *)",
       "Bash(git add *)",
       "Bash(git rm *)",
-      "mcp__Claude_Code_Remote__add_repo"
+      "mcp__Claude_Code_Remote__add_repo",
+      "mcp__Claude_Code_Remote__register_repo_root",
+      "Bash(mkdir -p /workspace/fieldplanner/tools)",
+      "Bash(cp /tmp/claude-0/-home-user-data-gig-tool/4ebcca98-19b8-549f-8827-72f362e62189/scratchpad/Jays_Field_Planner_v1.xlsx /workspace/fieldplanner/)",
+      "Bash(cp /tmp/claude-0/-home-user-data-gig-tool/4ebcca98-19b8-549f-8827-72f362e62189/scratchpad/build_workbook.py /workspace/fieldplanner/tools/)",
+      "Bash(cp \"/root/.claude/uploads/4ebcca98-19b8-549f-8827-72f362e62189/c3ed8c96-Jays_Field_Planner_Master_Design_Document.docx\" \"/workspace/fieldplanner/docs/Jays_Field_Planner_Master_Design_Document.docx\")",
+      "Bash(sed -i 's|^out = .*|out = \"Jays_Field_Planner_v1.xlsx\"|' /workspace/fieldplanner/tools/build_workbook.py)"
     ]
   }
 }
