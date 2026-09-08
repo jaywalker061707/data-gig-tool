@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Proposal Generator</title>
+<style>
+  :root {
+    --accent: #DA291C;
+    --ink: #1a1a1a;
+    --muted: #6b7280;
+    --border: #e2e2e2;
+    --bg-soft: #f7f7f8;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    color: var(--ink);
+    background: #eef0f2;
+  }
+
+  /* ---------- Layout: editor (left) + preview (right) ---------- */
+  .app {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  .editor {
+    width: 420px;
+    flex-shrink: 0;
+    background: #fff;
+    border-right: 1px solid var(--border);
+    padding: 20px;
+    overflow-y: auto;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+
+  .preview-wrap {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    padding: 30px;
+    overflow-y: auto;
+  }
+
+  h1 {
+    font-size: 18px;
+    margin: 0 0 4px;
+  }
+  .editor > p.hint {
+    font-size: 12px;
+    color: var(--muted);
+    margin: 0 0 16px;
+  }
+
+  fieldset {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px 14px;
+    margin: 0 0 14px;
+  }
+  legend {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    padding: 0 4px;
+  }
+
+  label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    margin: 8px 0 3px;
+  }
+  label:first-of-type { margin-top: 0; }
+
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="date"],
+  select,
+  textarea {
+    width: 100%;
+    padding: 7px 8px;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 40px; }
+
+  input[type="color"] {
+    width: 44px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    vertical-align: middle;
+    cursor: pointer;
+  }
+
+  .row2 { display: flex; gap: 8px; }
+  .row2 > div { flex: 1; }
+
+  .plan-block {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+    background: var(--bg-soft);
+  }
+  .plan-block-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .plan-block-head strong { font-size: 12px; }
+  .plan-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+  .plan-toggle input { width: auto; }
+
+  .plan-fields[data-disabled="true"] { opacity: 0.4; pointer-events: none; }
+
+  button.btn {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--accent, #DA291C);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+  button.btn:hover { filter: brightness(1.08); }
+  button.btn.secondary {
+    background: #fff;
+    color: var(--ink);
+    border: 1px solid #ccc;
+    font-weight: 600;
+  }
+
+  .logo-preview {
+    max-width: 100%;
+    max-height: 60px;
+    display: block;
+    margin-top: 6px;
+  }
+  .small-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ---------- Proposal document (print target) ---------- */
+  #proposal {
+    width: 8.5in;
+    min-height: 11in;
+    background: #fff;
+    box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0,0,0,0.08);
+    padding: 0.6in 0.7in;
+  }
+
+  .doc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 3px solid var(--accent);
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  .doc-header img {
+    max-height: 64px;
+    max-width: 240px;
+    object-fit: contain;
+    display: block;
+  }
+  .doc-company-name {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--ink);
+  }
+  .doc-company-meta {
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-top: 2px;
+  }
+  .doc-title-block { text-align: right; }
+  .doc-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+  }
+  .doc-date { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+
+  .doc-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin: 0 0 8px;
+  }
+
+  .customer-box {
+    background: var(--bg-soft);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 28px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .customer-box .cust-name { font-weight: 700; font-size: 14.5px; }
+
+  .plans {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 30px;
+  }
+  .plans.count-1 .plan-card { max-width: 340px; margin: 0 auto; }
+
+  .plan-card {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .plan-card.current { border: 2px solid var(--accent); }
+  .plan-card .badge {
+    position: absolute;
+    top: 10px;
+    right: -30px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 3px 34px;
+    transform: rotate(35deg);
+  }
+  .plan-card-head {
+    background: var(--bg-soft);
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .plan-name {
+    font-size: 14.5px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .plan-term { font-size: 11px; color: var(--muted); }
+  .plan-price-row {
+    padding: 16px;
+    text-align: center;
+  }
+  .plan-price {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--accent);
+  }
+  .plan-price span.period {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .plan-note {
+    padding: 0 16px 16px;
+    font-size: 11.5px;
+    color: #444;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    flex: 1;
+  }
+
+  .doc-footer {
+    margin-top: 30px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .notes-block {
+    font-size: 12px;
+    color: #333;
+    background: var(--bg-soft);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+
+  /* ---------- Print ---------- */
+  @media print {
+    body { background: #fff; }
+    .editor { display: none !important; }
+    .preview-wrap { padding: 0; display: block; }
+    #proposal {
+      box-shadow: none;
+      width: auto;
+      min-height: 0;
+      padding: 0.3in 0.4in;
+      margin: 0;
+    }
+    @page { margin: 0.4in; size: letter portrait; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app-root">
+  <!-- ============ EDITOR ============ -->
+  <div class="editor">
+    <h1>Proposal Generator</h1>
+    <p class="hint">Fill this in, review the preview on the right, then click Print / Save as PDF. Your company info is saved automatically for next time.</p>
+
+    <fieldset>
+      <legend>Your Company</legend>
+      <label>Company Name</label>
+      <input type="text" id="companyName" placeholder="Your Company LLC">
+
+      <label>Logo (optional)</label>
+      <input type="file" id="logoFile" accept="image/*">
+      <img id="logoPreview" class="logo-preview" style="display:none">
+      <div class="small-note"><button type="button" class="btn secondary" id="clearLogo" style="margin-top:6px;">Remove logo</button></div>
+
+      <div class="row2">
+        <div>
+          <label>Rep / Contact Name</label>
+          <input type="text" id="repName" placeholder="Jane Smith">
+        </div>
+        <div>
+          <label>Accent Color</label>
+          <input type="color" id="accentColor" value="#DA291C">
+        </div>
+      </div>
+      <div class="row2">
+        <div>
+          <label>Contact Email</label>
+          <input type="email" id="repEmail" placeholder="jane@company.com">
+        </div>
+        <div>
+          <label>Contact Phone</label>
+          <input type="tel" id="repPhone" placeholder="(555) 555-1234">
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Customer</legend>
+      <label>Customer / Business Name</label>
+      <input type="text" id="custName" placeholder="Acme Diner">
+      <div class="row2">
+        <div>
+          <label>Contact Name (optional)</label>
+          <input type="text" id="custContact" placeholder="John Doe">
+        </div>
+        <div>
+          <label>Proposal Date</label>
+          <input type="date" id="propDate">
+        </div>
+      </div>
+      <label>Customer Type</label>
+      <select id="custType">
+        <option value="new">New Customer</option>
+        <option value="existing">Existing Customer</option>
+      </select>
+    </fieldset>
+
+    <fieldset>
+      <legend>Plan Options</legend>
+      <div id="plansEditor"></div>
+      <div class="small-note">Toggle up to 3 options on/off. For existing customers, mark one as "Current Plan."</div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Additional Notes (optional)</legend>
+      <textarea id="notes" placeholder="e.g. Pricing valid for 30 days. Installation fees waived for new agreements."></textarea>
+    </fieldset>
+
+    <button class="btn" onclick="window.print()">Print / Save as PDF</button>
+  </div>
+
+  <!-- ============ LIVE PREVIEW ============ -->
+  <div class="preview-wrap">
+    <div id="proposal"></div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = "proposalGenState_v1";
+
+const defaultState = {
+  companyName: "",
+  logoDataUrl: "",
+  repName: "",
+  repEmail: "",
+  repPhone: "",
+  accentColor: "#DA291C",
+  custName: "",
+  custContact: "",
+  propDate: new Date().toISOString().slice(0,10),
+  custType: "new",
+  notes: "",
+  plans: [
+    { enabled: true,  current: false, name: "300 Mbps Business Internet", price: "89.99", period: "/mo", term: "24-month agreement", note: "" },
+    { enabled: true,  current: false, name: "600 Mbps Business Internet", price: "119.99", period: "/mo", term: "24-month agreement", note: "" },
+    { enabled: false, current: false, name: "Business VoIP - 5 Lines", price: "150.00", period: "/mo", term: "No annual contract", note: "" }
+  ]
+};
+
+let state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return structuredClone(defaultState);
+    const saved = JSON.parse(raw);
+    return Object.assign(structuredClone(defaultState), saved);
+  } catch (e) {
+    return structuredClone(defaultState);
+  }
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+function esc(str) {
+  return (str || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+}
+
+function fmtDate(iso) {
+  if (!iso) return "";
+  const [y,m,d] = iso.split("-").map(Number);
+  return new Date(y, m-1, d).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+/* ---------- build editor form (once) ---------- */
+function initEditor() {
+  document.getElementById("companyName").value = state.companyName;
+  document.getElementById("repName").value = state.repName;
+  document.getElementById("repEmail").value = state.repEmail;
+  document.getElementById("repPhone").value = state.repPhone;
+  document.getElementById("accentColor").value = state.accentColor;
+  document.getElementById("custName").value = state.custName;
+  document.getElementById("custContact").value = state.custContact;
+  document.getElementById("propDate").value = state.propDate;
+  document.getElementById("custType").value = state.custType;
+  document.getElementById("notes").value = state.notes;
+
+  if (state.logoDataUrl) {
+    const img = document.getElementById("logoPreview");
+    img.src = state.logoDataUrl;
+    img.style.display = "block";
+  }
+
+  const simpleFields = ["companyName","repName","repEmail","repPhone","custName","custContact","propDate","custType","notes"];
+  simpleFields.forEach(id => {
+    document.getElementById(id).addEventListener("input", () => {
+      state[id] = document.getElementById(id).value;
+      saveState(); render();
+    });
+  });
+
+  document.getElementById("accentColor").addEventListener("input", e => {
+    state.accentColor = e.target.value;
+    saveState(); render();
+  });
+
+  document.getElementById("logoFile").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      state.logoDataUrl = ev.target.result;
+      document.getElementById("logoPreview").src = state.logoDataUrl;
+      document.getElementById("logoPreview").style.display = "block";
+      saveState(); render();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  document.getElementById("clearLogo").addEventListener("click", () => {
+    state.logoDataUrl = "";
+    document.getElementById("logoPreview").style.display = "none";
+    document.getElementById("logoFile").value = "";
+    saveState(); render();
+  });
+
+  renderPlansEditor();
+}
+
+function renderPlansEditor() {
+  const container = document.getElementById("plansEditor");
+  container.innerHTML = "";
+  state.plans.forEach((plan, i) => {
+    const block = document.createElement("div");
+    block.className = "plan-block";
+    block.innerHTML = `
+      <div class="plan-block-head">
+        <label class="plan-toggle">
+          <input type="checkbox" data-i="${i}" data-f="enabled" ${plan.enabled ? "checked" : ""}>
+          Option ${i+1}
+        </label>
+        <label class="plan-toggle">
+          <input type="checkbox" data-i="${i}" data-f="current" ${plan.current ? "checked" : ""}>
+          Current Plan
+        </label>
+      </div>
+      <div class="plan-fields" data-disabled="${!plan.enabled}">
+        <label>Service / Plan Name</label>
+        <input type="text" data-i="${i}" data-f="name" value="${esc(plan.name)}" placeholder="e.g. 300 Mbps Business Internet">
+        <div class="row2">
+          <div>
+            <label>Price</label>
+            <input type="text" data-i="${i}" data-f="price" value="${esc(plan.price)}" placeholder="89.99">
+          </div>
+          <div>
+            <label>Billing</label>
+            <select data-i="${i}" data-f="period">
+              <option value="/mo" ${plan.period==="/mo"?"selected":""}>per month</option>
+              <option value="/line/mo" ${plan.period==="/line/mo"?"selected":""}>per line / month</option>
+              <option value="one-time" ${plan.period==="one-time"?"selected":""}>one-time</option>
+              <option value="" ${plan.period===""?"selected":""}>(no period)</option>
+            </select>
+          </div>
+        </div>
+        <label>Term (optional)</label>
+        <input type="text" data-i="${i}" data-f="term" value="${esc(plan.term)}" placeholder="e.g. 24-month agreement">
+        <label>Note (optional, short)</label>
+        <textarea data-i="${i}" data-f="note" placeholder="e.g. Includes free installation">${esc(plan.note)}</textarea>
+      </div>
+    `;
+    container.appendChild(block);
+  });
+
+  container.querySelectorAll("input, select, textarea").forEach(el => {
+    const evt = (el.tagName === "SELECT" || el.type === "checkbox") ? "change" : "input";
+    el.addEventListener(evt, () => {
+      const i = Number(el.dataset.i);
+      const f = el.dataset.f;
+      state.plans[i][f] = el.type === "checkbox" ? el.checked : el.value;
+      saveState();
+      renderPlansEditor();
+      render();
+    });
+  });
+}
+
+/* ---------- render the proposal document ---------- */
+function planCardHtml(plan) {
+  const priceNum = plan.price ? plan.price.replace(/[^0-9.]/g, "") : "";
+  const priceDisplay = priceNum ? `$${priceNum}` : (plan.price || "");
+  return `
+    <div class="plan-card ${plan.current ? "current" : ""}">
+      ${plan.current ? '<div class="badge">Current Plan</div>' : ""}
+      <div class="plan-card-head">
+        <div class="plan-name">${esc(plan.name) || "Untitled Plan"}</div>
+        ${plan.term ? `<div class="plan-term">${esc(plan.term)}</div>` : ""}
+      </div>
+      <div class="plan-price-row">
+        <span class="plan-price">${esc(priceDisplay)}</span>
+        ${plan.period ? `<span class="period"> ${esc(plan.period.replace("/mo"," / mo").replace("/line/mo"," / line / mo"))}</span>` : ""}
+      </div>
+      ${plan.note ? `<div class="plan-note">${esc(plan.note)}</div>` : ""}
+    </div>
+  `;
+}
+
+function render() {
+  const accent = state.accentColor || "#DA291C";
+  document.documentElement.style.setProperty("--accent", accent);
+
+  const activePlans = state.plans.filter(p => p.enabled && (p.name || p.price));
+  const custTypeLabel = state.custType === "existing" ? "Existing Customer" : "New Customer";
+
+  const html = `
+    <div class="doc-header">
+      <div>
+        ${state.logoDataUrl ? `<img src="${state.logoDataUrl}" alt="logo">` : `<div class="doc-company-name">${esc(state.companyName) || "Your Company"}</div>`}
+        ${state.logoDataUrl && state.companyName ? `<div class="doc-company-name" style="margin-top:6px;">${esc(state.companyName)}</div>` : ""}
+        <div class="doc-company-meta">
+          ${state.repName ? esc(state.repName) + "<br>" : ""}
+          ${state.repEmail ? esc(state.repEmail) + (state.repPhone ? " &nbsp;|&nbsp; " : "") : ""}${state.repPhone ? esc(state.repPhone) : ""}
+        </div>
+      </div>
+      <div class="doc-title-block">
+        <div class="doc-title">Service Proposal</div>
+        <div class="doc-date">${fmtDate(state.propDate)}</div>
+      </div>
+    </div>
+
+    <div class="customer-box">
+      <div class="cust-name">${esc(state.custName) || "Customer Name"}</div>
+      ${state.custContact ? `Attn: ${esc(state.custContact)}<br>` : ""}
+      ${custTypeLabel}
+    </div>
+
+    <div class="doc-section-title">${state.custType === "existing" ? "Current & Proposed Options" : "Proposed Options"}</div>
+    <div class="plans count-${activePlans.length || 1}">
+      ${activePlans.length ? activePlans.map(planCardHtml).join("") : '<div style="color:#999;font-size:13px;">Add at least one plan option.</div>'}
+    </div>
+
+    ${state.notes ? `<div class="notes-block">${esc(state.notes)}</div>` : ""}
+
+    <div class="doc-footer">
+      <div>${esc(state.companyName) || ""}</div>
+      <div>${state.repEmail ? esc(state.repEmail) : ""} ${state.repPhone ? " · " + esc(state.repPhone) : ""}</div>
+    </div>
+  `;
+
+  document.getElementById("proposal").innerHTML = html;
+}
+
+initEditor();
+render();
+</script>
+
+</body>
+</html>
