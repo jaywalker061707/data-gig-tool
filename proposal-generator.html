@@ -3,20 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <title>Proposal Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --accent: #DA291C;
+    --accent: #0057FF;       /* Comcast Business blue (CTA/accent) */
+    --brand-navy: #0A1638;   /* Comcast Business dark navy (header) */
     --ink: #1a1a1a;
     --muted: #6b7280;
     --border: #e2e2e2;
     --bg-soft: #f7f7f8;
+    --font: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   }
 
   * { box-sizing: border-box; }
 
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-family: var(--font);
     color: var(--ink);
     background: #eef0f2;
   }
@@ -134,7 +139,7 @@
     font-size: 14px;
     font-weight: 700;
     color: #fff;
-    background: var(--accent, #DA291C);
+    background: var(--accent, #0057FF);
     border: none;
     border-radius: 6px;
     cursor: pointer;
@@ -162,42 +167,57 @@
     min-height: 11in;
     background: #fff;
     box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0,0,0,0.08);
-    padding: 0.6in 0.7in;
+    padding: 0;
+    font-family: var(--font);
   }
 
   .doc-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    border-bottom: 3px solid var(--accent);
-    padding-bottom: 16px;
+    background: var(--brand-navy);
+    color: #fff;
+    border-bottom: 5px solid var(--accent);
+    padding: 0.5in 0.7in 20px;
     margin-bottom: 24px;
   }
+  .doc-header .logo-box {
+    display: inline-block;
+    background: #fff;
+    border-radius: 6px;
+    padding: 8px 12px;
+  }
   .doc-header img {
-    max-height: 64px;
-    max-width: 240px;
+    max-height: 50px;
+    max-width: 220px;
     object-fit: contain;
     display: block;
   }
   .doc-company-name {
     font-size: 20px;
     font-weight: 800;
-    color: var(--ink);
+    color: #fff;
+    letter-spacing: 0.01em;
   }
   .doc-company-meta {
     font-size: 11.5px;
-    color: var(--muted);
-    line-height: 1.5;
-    margin-top: 2px;
+    color: #c9c9c9;
+    line-height: 1.6;
+    margin-top: 8px;
   }
+  .doc-company-meta .rep-name { color: #fff; font-weight: 700; }
+  .doc-company-meta .rep-title { color: #c9c9c9; }
   .doc-title-block { text-align: right; }
   .doc-title {
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 800;
     color: var(--accent);
-    letter-spacing: 0.02em;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
   }
-  .doc-date { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .doc-date { font-size: 11.5px; color: #c9c9c9; margin-top: 4px; }
+
+  .doc-body { padding: 0 0.7in 0.6in; }
 
   .doc-section-title {
     font-size: 11px;
@@ -312,10 +332,11 @@
       box-shadow: none;
       width: auto;
       min-height: 0;
-      padding: 0.3in 0.4in;
       margin: 0;
     }
-    @page { margin: 0.4in; size: letter portrait; }
+    .doc-header { padding: 0.3in 0.4in 16px; }
+    .doc-body { padding: 0 0.4in 0.3in; }
+    @page { margin: 0; size: letter portrait; }
   }
 </style>
 </head>
@@ -344,9 +365,11 @@
         </div>
         <div>
           <label>Accent Color</label>
-          <input type="color" id="accentColor" value="#DA291C">
+          <input type="color" id="accentColor" value="#0057FF">
         </div>
       </div>
+      <label>Job Title</label>
+      <input type="text" id="repTitle" placeholder="Sr. Business Account Executive">
       <div class="row2">
         <div>
           <label>Contact Email</label>
@@ -404,12 +427,13 @@
 const STORAGE_KEY = "proposalGenState_v1";
 
 const defaultState = {
-  companyName: "",
+  companyName: "Comcast Business",
   logoDataUrl: "",
-  repName: "",
-  repEmail: "",
-  repPhone: "",
-  accentColor: "#DA291C",
+  repName: "Jay McIntyre",
+  repTitle: "Sr. Business Account Executive",
+  repEmail: "james_mcintyre2@comcast.com",
+  repPhone: "814-907-2557",
+  accentColor: "#0057FF",
   custName: "",
   custContact: "",
   propDate: new Date().toISOString().slice(0,10),
@@ -453,6 +477,7 @@ function fmtDate(iso) {
 function initEditor() {
   document.getElementById("companyName").value = state.companyName;
   document.getElementById("repName").value = state.repName;
+  document.getElementById("repTitle").value = state.repTitle;
   document.getElementById("repEmail").value = state.repEmail;
   document.getElementById("repPhone").value = state.repPhone;
   document.getElementById("accentColor").value = state.accentColor;
@@ -468,7 +493,7 @@ function initEditor() {
     img.style.display = "block";
   }
 
-  const simpleFields = ["companyName","repName","repEmail","repPhone","custName","custContact","propDate","custType","notes"];
+  const simpleFields = ["companyName","repName","repTitle","repEmail","repPhone","custName","custContact","propDate","custType","notes"];
   simpleFields.forEach(id => {
     document.getElementById(id).addEventListener("input", () => {
       state[id] = document.getElementById(id).value;
@@ -582,7 +607,7 @@ function planCardHtml(plan) {
 }
 
 function render() {
-  const accent = state.accentColor || "#DA291C";
+  const accent = state.accentColor || "#0057FF";
   document.documentElement.style.setProperty("--accent", accent);
 
   const activePlans = state.plans.filter(p => p.enabled && (p.name || p.price));
@@ -591,10 +616,12 @@ function render() {
   const html = `
     <div class="doc-header">
       <div>
-        ${state.logoDataUrl ? `<img src="${state.logoDataUrl}" alt="logo">` : `<div class="doc-company-name">${esc(state.companyName) || "Your Company"}</div>`}
-        ${state.logoDataUrl && state.companyName ? `<div class="doc-company-name" style="margin-top:6px;">${esc(state.companyName)}</div>` : ""}
+        ${state.logoDataUrl
+          ? `<div class="logo-box"><img src="${state.logoDataUrl}" alt="logo"></div><div class="doc-company-name" style="margin-top:8px;">${esc(state.companyName)}</div>`
+          : `<div class="doc-company-name">${esc(state.companyName) || "Your Company"}</div>`}
         <div class="doc-company-meta">
-          ${state.repName ? esc(state.repName) + "<br>" : ""}
+          ${state.repName ? `<span class="rep-name">${esc(state.repName)}</span><br>` : ""}
+          ${state.repTitle ? `<span class="rep-title">${esc(state.repTitle)}</span><br>` : ""}
           ${state.repEmail ? esc(state.repEmail) + (state.repPhone ? " &nbsp;|&nbsp; " : "") : ""}${state.repPhone ? esc(state.repPhone) : ""}
         </div>
       </div>
@@ -604,22 +631,24 @@ function render() {
       </div>
     </div>
 
-    <div class="customer-box">
-      <div class="cust-name">${esc(state.custName) || "Customer Name"}</div>
-      ${state.custContact ? `Attn: ${esc(state.custContact)}<br>` : ""}
-      ${custTypeLabel}
-    </div>
+    <div class="doc-body">
+      <div class="customer-box">
+        <div class="cust-name">${esc(state.custName) || "Customer Name"}</div>
+        ${state.custContact ? `Attn: ${esc(state.custContact)}<br>` : ""}
+        ${custTypeLabel}
+      </div>
 
-    <div class="doc-section-title">${state.custType === "existing" ? "Current & Proposed Options" : "Proposed Options"}</div>
-    <div class="plans count-${activePlans.length || 1}">
-      ${activePlans.length ? activePlans.map(planCardHtml).join("") : '<div style="color:#999;font-size:13px;">Add at least one plan option.</div>'}
-    </div>
+      <div class="doc-section-title">${state.custType === "existing" ? "Current & Proposed Options" : "Proposed Options"}</div>
+      <div class="plans count-${activePlans.length || 1}">
+        ${activePlans.length ? activePlans.map(planCardHtml).join("") : '<div style="color:#999;font-size:13px;">Add at least one plan option.</div>'}
+      </div>
 
-    ${state.notes ? `<div class="notes-block">${esc(state.notes)}</div>` : ""}
+      ${state.notes ? `<div class="notes-block">${esc(state.notes)}</div>` : ""}
 
-    <div class="doc-footer">
-      <div>${esc(state.companyName) || ""}</div>
-      <div>${state.repEmail ? esc(state.repEmail) : ""} ${state.repPhone ? " · " + esc(state.repPhone) : ""}</div>
+      <div class="doc-footer">
+        <div>${esc(state.companyName) || ""}</div>
+        <div>${state.repEmail ? esc(state.repEmail) : ""} ${state.repPhone ? " · " + esc(state.repPhone) : ""}</div>
+      </div>
     </div>
   `;
 
